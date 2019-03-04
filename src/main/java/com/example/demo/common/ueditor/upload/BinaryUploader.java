@@ -8,6 +8,9 @@ import com.example.demo.common.ueditor.define.BaseState;
 import com.example.demo.common.ueditor.define.FileType;
 import com.example.demo.common.ueditor.define.State;
 import com.example.demo.common.utils.AliOSSUtil;
+import com.example.demo.common.utils.QiNiuUtil;
+import com.example.demo.common.utils.Result;
+import com.qiniu.common.QiniuException;
 import org.apache.commons.fileupload.FileItem;
 import org.apache.commons.fileupload.FileItemIterator;
 import org.apache.commons.fileupload.FileItemStream;
@@ -126,18 +129,13 @@ public class BinaryUploader {
 			String filePath = rootPath + savePath;
 
 			//七牛上传
-			/*try {
-
-				Response response = QiniuKit.simpleUpload(filePath, null);
-				String result = response.bodyString();
-				JSONObject jsonObject = JSON.parseObject(result);
-				savePath = PropKit.use("qiniu.properties").get("space_url") + jsonObject.getString("key");
-				// 如果是视频，截图
-
-			} catch (QiniuException e) {
+			try {
+				File file = new File(filePath);
+				Result result = QiNiuUtil.upload(file);
+				file.delete();
+			} catch (Exception e) {
 				return new BaseState(false, AppInfo.IO_ERROR);
-			}*/
-
+			}
 			//阿里云上传
 			try {
 				// 上传到OSS
