@@ -1,6 +1,6 @@
 package com.example.demo.controller;
 
-import com.baidu.ueditor.ActionEnter;
+import com.example.demo.common.ueditor.ActionEnter;
 import org.springframework.stereotype.Controller;
 import org.springframework.util.ClassUtils;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -33,7 +33,7 @@ public class UeditorController {
             String exec = new ActionEnter(request, rootPath).exec();
             System.out.println(exec);
             PrintWriter writer = response.getWriter();
-            writer.write(new ActionEnter( request, rootPath ).exec());
+            writer.write(exec);
             writer.flush();
             writer.close();
         } catch (IOException e) {
