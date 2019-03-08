@@ -2,22 +2,19 @@ package com.example.demo.common.ueditor.upload;
 
 
 import com.example.demo.common.ueditor.PathFormat;
-import com.example.demo.common.ueditor.UeditorConfigKit;
 import com.example.demo.common.ueditor.define.AppInfo;
 import com.example.demo.common.ueditor.define.BaseState;
-import com.example.demo.common.ueditor.define.FileType;
 import com.example.demo.common.ueditor.define.State;
 import com.example.demo.common.utils.AliOSSUtil;
-import com.example.demo.common.utils.QiNiuUtil;
-import com.example.demo.common.utils.Result;
-import com.qiniu.common.QiniuException;
+import com.example.demo.common.ueditor.define.FileType;
 import org.apache.commons.fileupload.FileItem;
-import org.apache.commons.fileupload.FileItemIterator;
 import org.apache.commons.fileupload.FileItemStream;
 import org.apache.commons.fileupload.disk.DiskFileItemFactory;
 import org.apache.commons.fileupload.servlet.ServletFileUpload;
 import org.apache.commons.io.FileUtils;
 import org.apache.commons.io.IOUtils;
+import org.springframework.web.multipart.MultipartFile;
+import org.springframework.web.multipart.MultipartHttpServletRequest;
 
 import javax.servlet.http.HttpServletRequest;
 import java.io.File;
@@ -41,49 +38,36 @@ public class BinaryUploader {
 
 	public static final State save(HttpServletRequest request,
 								   Map<String, Object> conf) {
-		FileItemStream fileStream = null;
-		boolean isAjaxUpload = request.getHeader("X_Requested_With") != null;
+//		FileItemStream fileStream = null;
+//		boolean isAjaxUpload = request.getHeader("X_Requested_With") != null;
 
 		if (!ServletFileUpload.isMultipartContent(request)) {
 			return new BaseState(false, AppInfo.NOT_MULTIPART_CONTENT);
 		}
-		boolean isMultipart = ServletFileUpload.isMultipartContent(request);
+//		boolean isMultipart = ServletFileUpload.isMultipartContent(request);
 //		if (isMultipart) {
 //			return getMultipartState(request, conf, fileStream, isAjaxUpload);
 //		} else {
-			return getState(request, conf, fileStream, isAjaxUpload);
+		return getState(request, conf);
 //		}
 	}
 
-	private static State getState(HttpServletRequest request, Map<String, Object> conf, FileItemStream fileStream, boolean isAjaxUpload) {
-		ServletFileUpload upload = new ServletFileUpload(new DiskFileItemFactory());
+	private static State getState(HttpServletRequest request, Map<String, Object> conf) {
+//		ServletFileUpload upload = new ServletFileUpload(new DiskFileItemFactory());
 
-		if (isAjaxUpload) {
+		/*if (isAjaxUpload) {
 			upload.setHeaderEncoding("UTF-8");
-		}
+		}*/
 
 		InputStream is = null;
+
+		if (!ServletFileUpload.isMultipartContent(request)) {
+			return new BaseState(false, AppInfo.NOT_MULTIPART_CONTENT);
+		}
 		try {
 
-			/*if (commonsMultipartResolver.isMultipart(request)) {//有文件上传
-				//将request变成多部分request
-				MultipartHttpServletRequest multiRequest = (MultipartHttpServletRequest) request;
-				//获取multiRequest 中所有的文件名
-				Iterator<String> iter = multiRequest.getFileNames();
-				while (iter.hasNext()) {
-					MultipartFile imageFile = multiRequest.getFile(iter.next());//(String) iter.next()
-					File f=File.createTempFile("temp",null);
-					imageFile.transferTo(f);
-					f.deleteOnExit();
-					is= new FileInputStream(f);
-				}
-			}
-*/
 
-
-
-
-			FileItemIterator iterator = upload.getItemIterator(request);
+			/*FileItemIterator iterator = upload.getItemIterator(request);
 
 			while (iterator.hasNext()) {
 				fileStream = iterator.next();
@@ -95,10 +79,16 @@ public class BinaryUploader {
 
 			if (fileStream == null) {
 				return new BaseState(false, 7);
+			}*/
+			MultipartHttpServletRequest multipartRequest = (MultipartHttpServletRequest) request;
+			MultipartFile multipartFile = multipartRequest.getFile(conf.get("fieldName").toString());
+			if(multipartFile==null){
+				return new BaseState(false, AppInfo.NOTFOUND_UPLOAD_DATA);
 			}
 
 			String savePath = (String) conf.get("savePath");
-			String originFileName = fileStream.getName();
+//			String originFileName = fileStream.getName();
+			String originFileName = multipartFile.getOriginalFilename();
 			String suffix = FileType.getSuffixByFilename(originFileName);
 
 			originFileName = originFileName.substring(0, originFileName.length() - suffix.length());
@@ -112,11 +102,19 @@ public class BinaryUploader {
 
 			savePath = PathFormat.parse(savePath, originFileName);
 
-			String rootPath = (String) conf.get("rootPath");
 
-			is = fileStream.openStream();
-			State storageState = UeditorConfigKit.getFileManager().saveFile(is, rootPath, savePath, maxSize);
+//			String rootPath = (String) conf.get("rootPath");
 
+			String basePath=(String) conf.get("basePath");
+			String physicalPath = basePath + savePath;
+
+//			is = fileStream.openStream();
+			is = multipartFile.getInputStream();
+//			State storageState = UeditorConfigKit.getFileManager().saveFile(is, rootPath, savePath, maxSize);
+
+			State storageState = StorageManager.saveFileByInputStream(is,
+					physicalPath, maxSize);
+			is.close();
 			//copy到共享目录，供nginx代理做图片服务器
 //			if(Globals.getBooleanProperty("file.store")){
 //				File floder = new File(Globals.getProperty("file.floder"));
@@ -126,20 +124,25 @@ public class BinaryUploader {
 //				File file = new File(rootPath+savePath);
 //				FileUtils.copyFile(file, new File(Globals.getProperty("file.floder") + savePath));
 //			}
-			String filePath = rootPath + savePath;
+//			String filePath = rootPath + savePath;
 
 			//七牛上传
-			try {
-				File file = new File(filePath);
-				Result result = QiNiuUtil.upload(file);
-				file.delete();
-			} catch (Exception e) {
+			/*try {
+
+				Response response = QiniuKit.simpleUpload(filePath, null);
+				String result = response.bodyString();
+				JSONObject jsonObject = JSON.parseObject(result);
+				savePath = PropKit.use("qiniu.properties").get("space_url") + jsonObject.getString("key");
+				// 如果是视频，截图
+
+			} catch (QiniuException e) {
 				return new BaseState(false, AppInfo.IO_ERROR);
-			}
+			}*/
+
 			//阿里云上传
 			try {
 				// 上传到OSS
-				File file = new File(filePath);
+				File file = new File(physicalPath);
 				savePath = AliOSSUtil.upload(file);
 				file.delete();
 			} catch (Exception e){
